@@ -47,5 +47,32 @@
       { "point": [ 0, 0, 0 ], "overmap": "meatpacking_plant_1_north" },
       { "point": [ 0, 0, 1 ], "overmap": "meatpacking_plant_1_roof_north" }
     ]
+  },
+  {
+    "type": "city_building",
+    "id": "meatpacking_plant_1_east",
+    "locations": [ "land" ],
+    "overmaps": [
+      { "point": [ 0, 0, 0 ], "overmap": "meatpacking_plant_1_east" },
+      { "point": [ 0, 0, 1 ], "overmap": "meatpacking_plant_1_roof_east" }
+    ]
+  },
+  {
+    "type": "city_building",
+    "id": "meatpacking_plant_1_south",
+    "locations": [ "land" ],
+    "overmaps": [
+      { "point": [ 0, 0, 0 ], "overmap": "meatpacking_plant_1_south" },
+      { "point": [ 0, 0, 1 ], "overmap": "meatpacking_plant_1_roof_south" }
+    ]
+  },
+  {
+    "type": "city_building",
+    "id": "meatpacking_plant_1_west",
+    "locations": [ "land" ],
+    "overmaps": [
+      { "point": [ 0, 0, 0 ], "overmap": "meatpacking_plant_1_west" },
+      { "point": [ 0, 0, 1 ], "overmap": "meatpacking_plant_1_roof_west" }
+    ]
   }
 ]
