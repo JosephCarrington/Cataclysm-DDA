@@ -3797,6 +3797,14 @@ bool mattack::flesh_golem( monster *z )
     return true;
 }
 
+bool mattack::absorb_meat( monster *z ) {
+    bool seen = g->u.sees( *z );
+    if( seen ) {
+        add_msg( _( "The %1$s absorbs some meat" ), z->name() );
+    }
+    z->heal(10, true);
+}
+
 bool mattack::lunge( monster *z )
 {
     if( !z->can_act() ) {
