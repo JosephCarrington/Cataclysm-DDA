@@ -3812,6 +3812,10 @@ bool mattack::absorb_meat( monster *z )
                 const int grams_of_meat = units::to_milliliter<int>( current_item.volume() );
                 const int total_charges = current_item.count();
                 const int grams_per_charge = grams_of_meat / total_charges;
+                //We have a max size of meat here to avoid absorbing whole corpses. 500 grams is a typical meat chunk
+                if( grams_per_charge > max_meat_absorbed * 500 ) {
+                    return false;
+                }
                 if( current_item.count_by_charges() ) {
                     //Choose a random amount of meat charges to absorb
                     long meat_absorbed = std::min( max_meat_absorbed, rng( 1, total_charges ) );
