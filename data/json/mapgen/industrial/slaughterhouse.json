@@ -1,45 +1,5 @@
 [
   {
-    "type": "item_group",
-    "id": "slaughter_raw_meat",
-    "items": [
-      { "item": "meat", "prob": 8, "charges": [ 1, 10 ] },
-      { "item": "lung", "prob": 1, "charges": [ 1, 20 ] },
-      { "item": "kidney", "prob": 1, "charges": [ 1, 20 ] },
-      { "item": "liver", "prob": 1, "charges": [ 1, 10 ] },
-      { "item": "brain", "prob": 1, "charges": [ 1, 10 ] },
-      { "item": "sweetbread", "prob": 2, "charges": [ 1, 10 ] },
-      { "item": "fat", "prob": 2, "charges": [ 5, 30 ] }
-    ]
-  },
-  {
-    "type": "item_group",
-    "id": "slaughter_tools",
-    "items": [ [ "knife_butcher", 30 ], [ "tongs", 10 ], [ "hacksaw", 10 ] ]
-  },
-  {
-    "type": "item_group",
-    "id": "slaughter_clothes",
-    "items": [
-      [ "apron_leather", 30 ],
-      [ "jumpsuit", 30 ],
-      [ "gloves_rubber", 10 ],
-      [ "boots_rubber", 10 ],
-      [ "gloves_cut_resistant", 10 ]
-    ]
-  },
-  {
-    "id": "f_hanging_meathook",
-    "type": "furniture",
-    "name": "hanging meathook",
-    "symbol": "g",
-    "required_str": -1,
-    "move_cost_mod": 2,
-    "color": "light_gray",
-    "deconstruct": { "items": [ { "item": "grip_hook", "count": 1 }, { "item": "chain", "count": 1 } ] },
-    "flags": [ "TRANSPARENT", "BUTCHER_EQ" ]
-  },
-  {
     "type": "mapgen",
     "method": "json",
     "om_terrain": [ "slaughterhouse_1_roof" ],
@@ -171,10 +131,10 @@
         { "group": "slaughter_tools", "chance": 50, "repeat": [ 1, 3 ], "x": [ 16, 16 ], "y": [ 6, 8 ] },
         { "group": "slaughter_tools", "chance": 50, "repeat": [ 1, 3 ], "x": [ 16, 16 ], "y": [ 10, 12 ] },
         { "group": "slaughter_tools", "chance": 50, "repeat": [ 1, 3 ], "x": [ 16, 16 ], "y": [ 14, 16 ] },
-        { "group": "slaughter_raw_meat", "chance": 50, "repeat": [ 1, 3 ], "x": [ 14, 14 ], "y": [ 6, 8 ] },
-        { "group": "slaughter_raw_meat", "chance": 50, "repeat": [ 1, 3 ], "x": [ 14, 14 ], "y": [ 10, 12 ] },
-        { "group": "slaughter_raw_meat", "chance": 50, "repeat": [ 1, 3 ], "x": [ 14, 14 ], "y": [ 14, 16 ] },
-        { "group": "slaughter_raw_meat", "chance": 75, "repeat": [ 1, 11 ], "x": [ 8, 8 ], "y": [ 6, 17 ] }
+        { "group": "raw_meat", "chance": 50, "repeat": [ 1, 3 ], "x": [ 14, 14 ], "y": [ 6, 8 ] },
+        { "group": "raw_meat", "chance": 50, "repeat": [ 1, 3 ], "x": [ 14, 14 ], "y": [ 10, 12 ] },
+        { "group": "raw_meat", "chance": 50, "repeat": [ 1, 3 ], "x": [ 14, 14 ], "y": [ 14, 16 ] },
+        { "group": "raw_meat", "chance": 75, "repeat": [ 1, 11 ], "x": [ 8, 8 ], "y": [ 6, 17 ] }
       ],
       "place_monsters": [
         { "monster": "GROUP_ROACH", "x": 11, "y": 11, "chance": 10, "density": 0.5 },
