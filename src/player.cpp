@@ -1,6 +1,6 @@
 #include "player.h"
 
-#include <ctype.h>
+#include <cctype>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -262,7 +262,6 @@ static const trait_id trait_ARACHNID_ARMS_OK( "ARACHNID_ARMS_OK" );
 static const trait_id trait_ASTHMA( "ASTHMA" );
 static const trait_id trait_BADBACK( "BADBACK" );
 static const trait_id trait_BARK( "BARK" );
-static const trait_id trait_BIRD_EYE( "BIRD_EYE" );
 static const trait_id trait_CANNIBAL( "CANNIBAL" );
 static const trait_id trait_CENOBITE( "CENOBITE" );
 static const trait_id trait_CEPH_EYES( "CEPH_EYES" );
@@ -383,7 +382,6 @@ static const trait_id trait_RADIOACTIVE3( "RADIOACTIVE3" );
 static const trait_id trait_RADIOGENIC( "RADIOGENIC" );
 static const trait_id trait_REGEN( "REGEN" );
 static const trait_id trait_REGEN_LIZ( "REGEN_LIZ" );
-static const trait_id trait_HAIRROOTS( "HAIRROOTS" );
 static const trait_id trait_ROOTS2( "ROOTS2" );
 static const trait_id trait_ROOTS3( "ROOTS3" );
 static const trait_id trait_SAPIOVORE( "SAPIOVORE" );
@@ -887,7 +885,7 @@ void player::process_turn()
                 // Reduce the tracked time spent in this overmap tile.
                 const time_duration decay_amount = std::min( since_visit - modified_decay_time, 1_hours );
                 const time_duration updated_value = it->second - decay_amount;
-                if( updated_value <= 0 ) {
+                if( updated_value <= 0_turns ) {
                     // We can stop tracking this tile if there's no longer any time recorded there.
                     it = overmap_time.erase( it );
                     continue;
@@ -1122,19 +1120,20 @@ void player::update_bodytemp()
         return;
     }
     /* Cache calls to g->get_temperature( player position ), used in several places in function */
-    const auto player_local_temp = g->get_temperature( pos() );
+    const auto player_local_temp = g->weather.get_temperature( pos() );
     // NOTE : visit weather.h for some details on the numbers used
     // Converts temperature to Celsius/10
     int Ctemperature = static_cast<int>( 100 * temp_to_celsius( player_local_temp ) );
-    const w_point weather = *g->weather_precise;
+    const w_point weather = *g->weather.weather_precise;
     int vehwindspeed = 0;
     if( const optional_vpart_position vp = g->m.veh_at( pos() ) ) {
         vehwindspeed = abs( vp->vehicle().velocity / 100 ); // vehicle velocity in mph
     }
     const oter_id &cur_om_ter = overmap_buffer.ter( global_omt_location() );
     bool sheltered = g->is_sheltered( pos() );
-    double total_windpower = get_local_windpower( g->windspeed + vehwindspeed, cur_om_ter, pos(),
-                             g->winddirection, sheltered );
+    double total_windpower = get_local_windpower( g->weather.windspeed + vehwindspeed, cur_om_ter,
+                             pos(),
+                             g->weather.winddirection, sheltered );
     // Let's cache this not to check it num_bp times
     const bool has_bark = has_trait( trait_BARK );
     const bool has_sleep = has_effect( effect_sleep );
@@ -1166,13 +1165,14 @@ void player::update_bodytemp()
                                -1.5f * get_fatigue() ) );
 
     // Sunlight
-    const int sunlight_warmth = g->is_in_sunlight( pos() ) ? ( g->weather == WEATHER_SUNNY ? 1000 :
+    const int sunlight_warmth = g->is_in_sunlight( pos() ) ? ( g->weather.weather == WEATHER_SUNNY ?
+                                1000 :
                                 500 ) : 0;
     const int best_fire = get_heat_radiation( pos(), true );
 
     const int lying_warmth = use_floor_warmth ? floor_warmth( pos() ) : 0;
     const int water_temperature =
-        100 * temp_to_celsius( g->get_cur_weather_gen().get_water_temperature() );
+        100 * temp_to_celsius( g->weather.get_cur_weather_gen().get_water_temperature() );
 
     // Correction of body temperature due to traits and mutations
     // Lower heat is applied always
@@ -1207,7 +1207,7 @@ void player::update_bodytemp()
                                              bp ) / 100.0 ) );
         // Calculate windchill
         int windchill = get_local_windchill( player_local_temp,
-                                             get_local_humidity( weather.humidity, g->weather,
+                                             get_local_humidity( weather.humidity, g->weather.weather,
                                                      sheltered ),
                                              bp_windpower );
         // If you're standing in water, air temperature is replaced by water temperature. No wind.
@@ -1808,7 +1808,7 @@ void player::recalc_speed_bonus()
             mod_speed_bonus( -( g->light_level( posz() ) >= 12 ? 5 : 10 ) );
         }
         /* Cache call to game::get_temperature( player position ) since it can be used several times here */
-        const auto player_local_temp = g->get_temperature( pos() );
+        const auto player_local_temp = g->weather.get_temperature( pos() );
         if( has_trait( trait_COLDBLOOD4 ) || ( has_trait( trait_COLDBLOOD3 ) && player_local_temp < 65 ) ) {
             mod_speed_bonus( ( player_local_temp - 65 ) / 2 );
         } else if( has_trait( trait_COLDBLOOD2 ) && player_local_temp < 65 ) {
@@ -2485,7 +2485,7 @@ time_duration player::estimate_effect_dur( const skill_id &relevant_skill,
         const efftype_id &target_effect, const time_duration &error_magnitude,
         int threshold, const Creature &target ) const
 {
-    const time_duration zero_duration = 0;
+    const time_duration zero_duration = 0_turns;
 
     int skill_lvl = get_skill_level( relevant_skill );
 
@@ -3078,22 +3078,26 @@ int player::get_shout_volume() const
 void player::shout( std::string msg, bool order )
 {
     int base = 10;
+    std::string shout = "";
 
     // Mutations make shouting louder, they also define the default message
     if( has_trait( trait_SHOUT3 ) ) {
         base = 20;
         if( msg.empty() ) {
             msg = is_player() ? _( "yourself let out a piercing howl!" ) : _( "a piercing howl!" );
+            shout = "howl";
         }
     } else if( has_trait( trait_SHOUT2 ) ) {
         base = 15;
         if( msg.empty() ) {
             msg = is_player() ? _( "yourself scream loudly!" ) : _( "a loud scream!" );
+            shout = "scream";
         }
     }
 
     if( msg.empty() ) {
         msg = is_player() ? _( "yourself shout loudly!" ) : _( "a loud shout!" );
+        shout = "default";
     }
     int noise = get_shout_volume();
 
@@ -3125,7 +3129,8 @@ void player::shout( std::string msg, bool order )
         add_msg_if_player( m_warning, _( "The sound of your voice is significantly muffled!" ) );
     }
 
-    sounds::sound( pos(), noise, order ? sounds::sound_t::order : sounds::sound_t::alert, msg );
+    sounds::sound( pos(), noise, order ? sounds::sound_t::order : sounds::sound_t::alert, msg, false,
+                   "shout", shout );
 }
 
 void player::set_movement_mode( const std::string &new_mode )
@@ -3847,6 +3852,7 @@ void player::apply_damage( Creature *source, body_part hurt, int dam, const bool
             remove_med -= reduce_healing_effect( effect_bandaged, remove_med, hurt );
         }
         if( remove_med > 0 && has_effect( effect_disinfected, hurt ) ) {
+            // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores)
             remove_med -= reduce_healing_effect( effect_disinfected, remove_med, hurt );
         }
     }
@@ -4221,6 +4227,9 @@ void player::update_body( const time_point &from, const time_point &to )
 
     const int thirty_mins = ticks_between( from, to, 30_minutes );
     if( thirty_mins > 0 ) {
+        if( activity.is_null() ) {
+            reset_activity_level();
+        }
         // Radiation kills health even at low doses
         update_health( has_trait( trait_RADIOGENIC ) ? 0 : -radiation );
         get_sick();
@@ -4254,8 +4263,7 @@ void player::update_stomach( const time_point &from, const time_point &to )
     const bool foodless = debug_ls || npc_no_food;
     const bool mouse = has_trait( trait_NO_THIRST );
     const bool mycus = has_trait( trait_M_DEPENDENT );
-    // @TODO: move to kcal altogether
-    const float kcal_per_nutr = 2400.0f / ( 12 * 24 );
+    const float kcal_per_time = get_bmr() / ( 12.0f * 24.0f );
     const int five_mins = ticks_between( from, to, 5_minutes );
 
     if( five_mins > 0 ) {
@@ -4297,7 +4305,7 @@ void player::update_stomach( const time_point &from, const time_point &to )
         if( !foodless && rates.hunger > 0.0f ) {
             mod_hunger( roll_remainder( rates.hunger * five_mins ) );
             // instead of hunger keeping track of how you're living, burn calories instead
-            mod_stored_kcal( roll_remainder( rates.hunger * five_mins * -kcal_per_nutr ) );
+            mod_stored_kcal( -roll_remainder( five_mins * kcal_per_time ) );
         }
     } else
         // you fill up when you eat fast, but less so than if you eat slow
@@ -4593,7 +4601,7 @@ needs_rates player::calc_needs_rates()
 
     needs_rates rates;
     rates.hunger = metabolic_rate();
-    rates.fatigue = 1.0f;
+
     // TODO: this is where calculating basal metabolic rate, in kcal per day would go
     rates.kcal = 2500.0;
 
@@ -4604,6 +4612,9 @@ needs_rates player::calc_needs_rates()
     if( worn_with_flag( "SLOWS_THIRST" ) ) {
         rates.thirst *= 0.7f;
     }
+
+    rates.fatigue = get_option< float >( "PLAYER_FATIGUE_RATE" );
+    rates.fatigue *= 1.0f + mutation_value( "fatigue_modifier" );
 
     // Note: intentionally not in metabolic rate
     if( has_recycler ) {
@@ -4649,8 +4660,6 @@ needs_rates player::calc_needs_rates()
         rates.hunger *= 0.25f;
         rates.thirst *= 0.25f;
     }
-    rates.fatigue = get_option< float >( "PLAYER_FATIGUE_RATE" );
-    rates.fatigue *= 1.0f + mutation_value( "fatigue_modifier" );
 
     return rates;
 }
@@ -5019,7 +5028,7 @@ void player::cough( bool harmful, int loudness )
     if( !is_npc() ) {
         add_msg( m_bad, _( "You cough heavily." ) );
     }
-    sounds::sound( pos(), loudness, sounds::sound_t::speech, _( "a hacking cough." ) );
+    sounds::sound( pos(), loudness, sounds::sound_t::speech, _( "a hacking cough." ), "misc", "cough" );
 
     moves -= 80;
 
@@ -5478,7 +5487,7 @@ void player::suffer()
 
     if( has_active_mutation( trait_id( "WINGS_INSECT" ) ) ) {
         //~Sound of buzzing Insect Wings
-        sounds::sound( pos(), 10, sounds::sound_t::movement, _( "BZZZZZ" ) );
+        sounds::sound( pos(), 10, sounds::sound_t::movement, _( "BZZZZZ" ), false, "misc", "insect_wings" );
     }
 
     bool wearing_shoes = is_wearing_shoes( side::LEFT ) || is_wearing_shoes( side::RIGHT );
@@ -5854,6 +5863,7 @@ void player::suffer()
                         add_msg( m_bad, str );
                         drop( get_item_position( &weapon ), pos() );
                     }
+                    // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores)
                     done_effect = true;
                 }
             }
@@ -5937,7 +5947,7 @@ void player::suffer()
                        map_inv.has_charges( "smoxygen_tank", 1 ) ) {
                 add_msg_if_player( m_bad, _( "You have an asthma attack!" ) );
                 // create new variable to resolve a reference issue
-                long amount = 1;
+                int amount = 1;
                 if( !g->m.use_charges( g->u.pos(), 2, "inhaler", amount ).empty() ) {
                     add_msg_if_player( m_info, _( "You use your inhaler and go back to sleep." ) );
                 } else if( !g->m.use_charges( g->u.pos(), 2, "oxygen_tank", amount ).empty() ||
@@ -5954,7 +5964,7 @@ void player::suffer()
                 }
             }
         } else if( auto_use ) {
-            long charges = 0;
+            int charges = 0;
             if( use_charges_if_avail( "inhaler", 1 ) ) {
                 moves -= 40;
                 charges = charges_of( "inhaler" );
@@ -6044,7 +6054,7 @@ void player::suffer()
     }
 
     if( ( has_trait( trait_TROGLO ) || has_trait( trait_TROGLO2 ) ) &&
-        g->is_in_sunlight( pos() ) && g->weather == WEATHER_SUNNY ) {
+        g->is_in_sunlight( pos() ) && g->weather.weather == WEATHER_SUNNY ) {
         mod_str_bonus( -1 );
         mod_dex_bonus( -1 );
         add_miss_reason( _( "The sunlight distracts you." ), 1 );
@@ -6345,7 +6355,7 @@ void player::suffer()
             add_msg( m_bad, _( "You feel your faulty bionic shuddering." ) );
             sfx::play_variant_sound( "bionics", "elec_blast_muffled", 100 );
         }
-        sounds::sound( pos(), 60, sounds::sound_t::movement, _( "Crackle!" ) );
+        sounds::sound( pos(), 60, sounds::sound_t::movement, _( "Crackle!" ) ); //sfx above
     }
     if( has_bionic( bio_power_weakness ) && max_power_level > 0 &&
         power_level >= max_power_level * .75 ) {
@@ -7156,7 +7166,7 @@ void player::process_active_items()
         return itm.needs_processing() && itm.process( this, pos(), false );
     } );
 
-    long ch_UPS = charges_of( "UPS" );
+    int ch_UPS = charges_of( "UPS" );
     item *cloak = nullptr;
     item *power_armor = nullptr;
     // Manual iteration because we only care about *worn* active items.
@@ -7207,7 +7217,7 @@ void player::process_active_items()
     // Load all items that use the UPS to their minimal functional charge,
     // The tool is not really useful if its charges are below charges_to_use
     ch_UPS = charges_of( "UPS" ); // might have been changed by cloak
-    long ch_UPS_used = 0;
+    int ch_UPS_used = 0;
     for( size_t i = 0; i < inv.size() && ch_UPS_used < ch_UPS; i++ ) {
         item &it = inv.find_item( i );
         if( !it.has_flag( "USE_UPS" ) ) {
@@ -7241,7 +7251,7 @@ void player::process_active_items()
     }
 }
 
-item player::reduce_charges( int position, long quantity )
+item player::reduce_charges( int position, int quantity )
 {
     item &it = i_at( position );
     if( it.is_null() ) {
@@ -7257,7 +7267,7 @@ item player::reduce_charges( int position, long quantity )
     return tmp;
 }
 
-item player::reduce_charges( item *it, long quantity )
+item player::reduce_charges( item *it, int quantity )
 {
     if( !has_item( *it ) ) {
         debugmsg( "invalid item (name %s) for reduce_charges", it->tname() );
@@ -7325,11 +7335,10 @@ std::vector<item *> player::inv_dump()
     return ret;
 }
 
-std::list<item> player::use_amount( itype_id it, int _quantity,
+std::list<item> player::use_amount( itype_id it, int quantity,
                                     const std::function<bool( const item & )> &filter )
 {
     std::list<item> ret;
-    long quantity = _quantity; // Don't want to change the function signature right now
     if( weapon.use_amount( it, quantity, ret ) ) {
         remove_weapon();
     }
@@ -7349,7 +7358,7 @@ std::list<item> player::use_amount( itype_id it, int _quantity,
     return ret;
 }
 
-bool player::use_charges_if_avail( const itype_id &it, long quantity )
+bool player::use_charges_if_avail( const itype_id &it, int quantity )
 {
     if( has_charges( it, quantity ) ) {
         use_charges( it, quantity );
@@ -7419,7 +7428,7 @@ void player::use_fire( const int quantity )
     }
 }
 
-std::list<item> player::use_charges( const itype_id &what, long qty,
+std::list<item> player::use_charges( const itype_id &what, int qty,
                                      const std::function<bool( const item & )> &filter )
 {
     std::list<item> res;
@@ -7437,21 +7446,21 @@ std::list<item> player::use_charges( const itype_id &what, long qty,
 
     } else if( what == "UPS" ) {
         if( power_level > 0 && has_active_bionic( bio_ups ) ) {
-            auto bio = std::min( static_cast<long>( power_level ), qty );
+            int bio = std::min( power_level, qty );
             charge_power( -bio );
             qty -= std::min( qty, bio );
         }
 
-        auto adv = charges_of( "adv_UPS_off", static_cast<long>( ceil( qty * 0.6 ) ) );
+        int adv = charges_of( "adv_UPS_off", static_cast<int>( ceil( qty * 0.6 ) ) );
         if( adv > 0 ) {
-            auto found = use_charges( "adv_UPS_off", adv );
+            std::list<item> found = use_charges( "adv_UPS_off", adv );
             res.splice( res.end(), found );
-            qty -= std::min( qty, static_cast<long>( adv / 0.6 ) );
+            qty -= std::min( qty, static_cast<int>( adv / 0.6 ) );
         }
 
-        auto ups = charges_of( "UPS_off", qty );
+        int ups = charges_of( "UPS_off", qty );
         if( ups > 0 ) {
-            auto found = use_charges( "UPS_off", ups );
+            std::list<item> found = use_charges( "UPS_off", ups );
             res.splice( res.end(), found );
             qty -= std::min( qty, ups );
         }
@@ -7520,7 +7529,7 @@ int player::amount_worn( const itype_id &id ) const
     return amount;
 }
 
-bool player::has_charges( const itype_id &it, long quantity,
+bool player::has_charges( const itype_id &it, int quantity,
                           const std::function<bool( const item & )> &filter ) const
 {
     if( it == "fire" || it == "apparatus" ) {
@@ -7582,7 +7591,7 @@ bool player::consume_med( item &target )
         use_charges( tool_type, req_tool->tool->charges_per_use );
     }
 
-    long amount_used = 1;
+    int amount_used = 1;
     if( target.type->has_use() ) {
         amount_used = target.type->invoke( *this, target, pos() );
         if( amount_used <= 0 ) {
@@ -7620,7 +7629,7 @@ bool player::consume_item( item &target )
         return false;
     }
 
-    item &comest = get_comestible_from( target );
+    item &comest = get_consumable_from( target );
 
     if( comest.is_null() || target.is_craft() ) {
         add_msg_if_player( m_info, _( "You can't eat your %s." ), target.tname() );
@@ -8618,12 +8627,12 @@ int player::item_store_cost( const item &it, const item & /* container */, bool 
     return item_handling_cost( it, penalties, base_cost ) / ( ( lvl + 10.0f ) / 10.0f );
 }
 
-int player::item_reload_cost( const item &it, const item &ammo, long qty ) const
+int player::item_reload_cost( const item &it, const item &ammo, int qty ) const
 {
     if( ammo.is_ammo() ) {
-        qty = std::max( std::min( ammo.charges, qty ), 1L );
+        qty = std::max( std::min( ammo.charges, qty ), 1 );
     } else if( ammo.is_ammo_container() || ammo.is_container() ) {
-        qty = std::max( std::min( ammo.contents.front().charges, qty ), 1L );
+        qty = std::max( std::min( ammo.contents.front().charges, qty ), 1 );
     } else if( ammo.is_magazine() ) {
         qty = 1;
     } else {
@@ -9031,7 +9040,7 @@ bool player::unload( item &it )
         bool changed = false;
         it.contents.erase( std::remove_if( it.contents.begin(), it.contents.end(), [this,
         &changed]( item & e ) {
-            long old_charges = e.charges;
+            int old_charges = e.charges;
             const bool consumed = this->add_or_drop_with_msg( e, true );
             changed = changed || consumed || e.charges != old_charges;
             if( consumed ) {
@@ -9132,7 +9141,7 @@ bool player::unload( item &it )
         } ) );
 
     } else if( target->ammo_remaining() ) {
-        long qty = target->ammo_remaining();
+        int qty = target->ammo_remaining();
 
         if( target->ammo_type() == ammotype( "plutonium" ) ) {
             qty = target->ammo_remaining() / PLUTONIUM_CHARGES;
@@ -9320,7 +9329,7 @@ bool player::has_enough_charges( const item &it, bool show_msg ) const
     return true;
 }
 
-bool player::consume_charges( item &used, long qty )
+bool player::consume_charges( item &used, int qty )
 {
     if( qty < 0 ) {
         debugmsg( "Tried to consume negative charges" );
@@ -9393,6 +9402,12 @@ void player::use( item_location loc )
             add_msg_if_player( _( "You can't do anything interesting with your %s." ), used.tname() );
             return;
         }
+        invoke_item( &used, loc.position() );
+
+    } else if( used.type->can_use( "DOGFOOD" ) ||
+               used.type->can_use( "CATFOOD" ) ||
+               used.type->can_use( "BIRDFOOD" ) ||
+               used.type->can_use( "CATTLEFODDER" ) ) {
         invoke_item( &used, loc.position() );
 
     } else if( !used.is_craft() && ( used.is_food() ||
@@ -9474,7 +9489,7 @@ bool player::invoke_item( item *used, const std::string &method, const tripoint 
         return false;
     }
 
-    long charges_used = actually_used->type->invoke( *this, *actually_used, pt, method );
+    int charges_used = actually_used->type->invoke( *this, *actually_used, pt, method );
 
     if( used->is_tool() || used->is_medication() || used->get_contained().is_medication() ) {
         return consume_charges( *actually_used, charges_used );
@@ -9973,8 +9988,9 @@ bool player::read( int inventory_position, const bool continuous )
             };
 
             auto max_length = [&length]( const std::map<npc *, std::string> &m ) {
-                auto max_ele = std::max_element( m.begin(), m.end(), [&length]( std::pair<npc *, std::string> left,
-                std::pair<npc *, std::string> right ) {
+                auto max_ele = std::max_element( m.begin(),
+                                                 m.end(), [&length]( const std::pair<npc *, std::string> &left,
+                const std::pair<npc *, std::string> &right ) {
                     return length( left ) < length( right );
                 } );
                 return max_ele == m.end() ? 0 : length( *max_ele );
@@ -10051,7 +10067,7 @@ bool player::read( int inventory_position, const bool continuous )
     }
 
     if( !continuous ||
-    !std::all_of( learners.begin(), learners.end(), [&]( std::pair<npc *, std::string> elem ) {
+    !std::all_of( learners.begin(), learners.end(), [&]( const std::pair<npc *, std::string> &elem ) {
     return std::count( activity.values.begin(), activity.values.end(), elem.first->getID() ) != 0;
     } ) ||
     !std::all_of( activity.values.begin(), activity.values.end(), [&]( int elem ) {
@@ -10062,7 +10078,7 @@ bool player::read( int inventory_position, const bool continuous )
             add_msg( m_info, _( "%s studies with you." ), learners.begin()->first->disp_name() );
         } else if( !learners.empty() ) {
             const std::string them = enumerate_as_string( learners.begin(),
-            learners.end(), [&]( std::pair<npc *, std::string> elem ) {
+            learners.end(), [&]( const std::pair<npc *, std::string> &elem ) {
                 return elem.first->disp_name();
             } );
             add_msg( m_info, _( "%s study with you." ), them );
@@ -11627,6 +11643,7 @@ void player::cancel_activity()
     if( activity && activity.is_suspendable() ) {
         backlog.push_front( activity );
     }
+    sfx::end_activity_sounds(); // kill activity sounds when canceled
     activity = player_activity();
 }
 
@@ -12084,6 +12101,14 @@ bool player::has_weapon() const
 
 m_size player::get_size() const
 {
+    if( has_trait( trait_id( "SMALL2" ) ) || has_trait( trait_id( "SMALL_OK" ) ) ||
+        has_trait( trait_id( "SMALL" ) ) ) {
+        return MS_SMALL;
+    } else if( has_trait( trait_LARGE ) || has_trait( trait_LARGE_OK ) ) {
+        return MS_LARGE;
+    } else if( has_trait( trait_HUGE ) || has_trait( trait_HUGE_OK ) ) {
+        return MS_HUGE;
+    }
     return MS_MEDIUM;
 }
 
@@ -12401,7 +12426,7 @@ bool player::can_hear( const tripoint &source, const int volume ) const
     }
     const int dist = rl_dist( source, pos() );
     const float volume_multiplier = hearing_ability();
-    return ( volume - weather_data( g->weather ).sound_attn ) * volume_multiplier >= dist;
+    return ( volume - weather_data( g->weather.weather ).sound_attn ) * volume_multiplier >= dist;
 }
 
 float player::hearing_ability() const
@@ -12661,7 +12686,7 @@ void player::spores()
 {
     fungal_effects fe( *g, g->m );
     //~spore-release sound
-    sounds::sound( pos(), 10, sounds::sound_t::combat, _( "Pouf!" ) );
+    sounds::sound( pos(), 10, sounds::sound_t::combat, _( "Pouf!" ), false, "misc", "puff" );
     for( const tripoint &sporep : g->m.points_in_radius( pos(), 1 ) ) {
         if( sporep == pos() ) {
             continue;
@@ -12673,7 +12698,7 @@ void player::spores()
 void player::blossoms()
 {
     // Player blossoms are shorter-ranged, but you can fire much more frequently if you like.
-    sounds::sound( pos(), 10, sounds::sound_t::combat, _( "Pouf!" ) );
+    sounds::sound( pos(), 10, sounds::sound_t::combat, _( "Pouf!" ), false, "misc", "puff" );
     for( const tripoint &tmp : g->m.points_in_radius( pos(), 2 ) ) {
         g->m.add_field( tmp, fd_fungal_haze, rng( 1, 2 ) );
     }
@@ -13002,4 +13027,63 @@ std::pair<std::string, nc_color> player::get_hunger_description() const
     }
 
     return std::make_pair( hunger_string, hunger_color );
+}
+
+float player::get_bmi() const
+{
+    return 12 * get_kcal_percent() + 13;
+}
+
+units::mass player::bodyweight() const
+{
+    return units::from_gram( round( get_bmi() * pow( height() / 100, 2 ) ) );
+}
+
+int player::height() const
+{
+    return 175;
+}
+
+int player::get_bmr() const
+{
+    /**
+        Values are for males, and average!
+     */
+    const int age = 25;
+    const int equation_constant = 5;
+    return ceil( metabolic_rate_base() * activity_level * ( units::to_gram<int>( 10 * bodyweight() ) +
+                 ( 6.25 * height() ) - ( 5 * age ) + equation_constant ) );
+}
+
+void player::increase_activity_level( float new_level )
+{
+    if( activity_level < new_level ) {
+        activity_level = new_level;
+    }
+}
+
+void player::decrease_activity_level( float new_level )
+{
+    if( activity_level > new_level ) {
+        activity_level = new_level;
+    }
+}
+void player::reset_activity_level()
+{
+    activity_level = NO_EXERCISE;
+}
+
+std::string player::activity_level_str() const
+{
+    if( activity_level <= NO_EXERCISE ) {
+        return _( "NO_EXERCISE" );
+    } else if( activity_level <= LIGHT_EXERCISE ) {
+        return _( "LIGHT_EXERCISE" );
+    } else if( activity_level <= MODERATE_EXERCISE ) {
+        return _( "MODERATE_EXERCISE" );
+    } else if( activity_level <= ACTIVE_EXERCISE ) {
+        return _( "ACTIVE_EXERCISE" );
+    } else {
+        return _( "EXTRA_EXERCISE" );
+    }
 }
